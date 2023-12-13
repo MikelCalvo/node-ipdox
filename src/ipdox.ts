@@ -99,9 +99,7 @@ class IPDox {
 		const response = await axios.get(requestURL);
 
 		if (response.data.status === "success") {
-			this.cacheResponse(ip, response.data);
-
-			return Promise.resolve({
+			const formattedResponse = {
 				ip: response.data.query,
 				country: response.data.countryCode,
 				city: response.data.city,
@@ -113,7 +111,11 @@ class IPDox {
 				proxy: response.data.proxy,
 				isHosting: response.data.hosting,
 				source: "ip-api.com"
-			});
+			};
+
+			this.cacheResponse(ip, formattedResponse);
+
+			return Promise.resolve(formattedResponse);
 		} else {
 			return Promise.reject();
 		}
@@ -124,9 +126,7 @@ class IPDox {
 		const response = await axios.get(requestURL);
 
 		if (response.data.ipVersion === 4) {
-			this.cacheResponse(ip, response.data);
-
-			return Promise.resolve({
+			const formattedResponse = {
 				ip: response.data.ipAddress,
 				country: response.data.countryCode,
 				city: response.data.cityName,
@@ -138,7 +138,11 @@ class IPDox {
 				proxy: response.data.proxy,
 				isHosting: response.data.hosting,
 				source: "freeipapi.com"
-			});
+			};
+
+			this.cacheResponse(ip, formattedResponse);
+
+			return Promise.resolve(formattedResponse);
 		} else {
 			return Promise.reject();
 		}
@@ -149,9 +153,7 @@ class IPDox {
 		const response = await axios.get(requestURL);
 
 		if (response.data.success) {
-			this.cacheResponse(ip, response.data);
-
-			return Promise.resolve({
+			const formattedResponse = {
 				ip: response.data.ip,
 				country: response.data.country_code,
 				city: response.data.city,
@@ -163,7 +165,11 @@ class IPDox {
 				proxy: false,
 				isHosting: false,
 				source: "ipwho.is"
-			});
+			};
+
+			this.cacheResponse(ip, formattedResponse);
+
+			return Promise.resolve(formattedResponse);
 		} else {
 			return Promise.reject();
 		}
@@ -174,9 +180,7 @@ class IPDox {
 		const response = await axios.get(requestURL);
 
 		if (response.data.ip) {
-			this.cacheResponse(ip, response.data);
-
-			return Promise.resolve({
+			const formattedResponse = {
 				ip: response.data.ip,
 				country: response.data.country_code,
 				city: response.data.city,
@@ -186,7 +190,11 @@ class IPDox {
 				zip: response.data.postal,
 				isp: response.data.org,
 				source: "ipapi.co"
-			});
+			};
+
+			this.cacheResponse(ip, formattedResponse);
+
+			return Promise.resolve(formattedResponse);
 		} else {
 			return Promise.reject();
 		}
