@@ -30,10 +30,15 @@ class IPDox {
 	 * @description Get information about an IP address
 	 * @param {IPDOXRequest} params - Params of the request
 	 * @param {string} params.ip - IP address
-	 * @returns {Promise<IPDOXResponse>} - Promise of the response
+	 * @returns {Promise<IPDOXResponse | undefined>} - Promise of the response or undefined
 	 * @memberof IPDox
 	 */
 	async doxIP({ ip }: IPDOXRequest): Promise<IPDOXResponse | undefined> {
+		// Check that the ip is valid
+		if (!ip || ip === "") {
+			return undefined;
+		}
+
 		// Check if the IP is already in the cache
 		if (this.cache.has(ip)) {
 			const cachedResponse = this.cache.get(ip);
