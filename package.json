@@ -1,0 +1,33 @@
+{
+	"name": "ipdox",
+	"version": "0.0.1",
+	"description": "",
+	"author": "Mikel Calvo <contact@mikecalvo.net> (www.mikelcalvo.net)",
+	"keywords": ["geoip", "ip lookup", "ipdoxxing"],
+	"license": "ISC",
+	"readmeFilename": "README.md",
+	"homepage": "https://github.com/mikelcalvo/ipdox#readme",
+	"bugs": {
+		"url": "https://github.com/mikelcalvo/ipdox/issues"
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist"],
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"format": "prettier --write \"**/*.ts\" \"**/*.js\" \"**/*.json\"",
+		"build": "tsc"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mikelcalvo/ipdox.git"
+	},
+	"dependencies": {
+		"axios": "1.6.2"
+	},
+	"devDependencies": {
+		"@types/node": "20.10.1",
+		"prettier": "3.1.0",
+		"typescript": "^5.3.2"
+	}
+}
