@@ -23,7 +23,8 @@
 		"url": "git+https://github.com/mikelcalvo/node-ipdox.git"
 	},
 	"dependencies": {
-		"axios": "1.6.2"
+		"axios": "1.6.2",
+		"lru-cache": "^10.1.0"
 	},
 	"devDependencies": {
 		"@types/node": "20.10.1",

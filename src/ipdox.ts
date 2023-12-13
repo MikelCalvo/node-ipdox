@@ -3,26 +3,34 @@ import { IPDOXRequest } from "./types/IPDOXRequest";
 import { IPDOXResponse } from "./types/IPDOXResponse";
 import { IPDOXConstructor } from "./types/IPDOXConstructor";
 import { GeoAPIs } from "./utils/apis";
+import { LRUCache } from "lru-cache";
 
 class IPDox {
-	private cache: Map<string, IPDOXResponse>;
-	private cacheTimeout: number;
+	private cache: LRUCache<string, IPDOXResponse>;
 	private maxRetries: number;
 
 	/**
 	 * @description Creates an instance of IPDox.
-	 * @param {IPDOXConstructor} params - Params of the constructor
-	 * @param {number} params.cacheTimeout - The cache timeout in milliseconds (default: 43200000 (12 hours))
+	 * @param {IPDOXConstructor} params
+	 * @param {number} params.cacheMaxItems - The maximum number of items in the cache (default: 1000)
+	 * @param {number} params.cacheMaxAge - The cache timeout in milliseconds (default: 43200000 (12 hours))
 	 * @param {number} params.maxRetries - The maximum number of retries (default: 10)
 	 */
 	constructor(
-		{ cacheTimeout = 43200000, maxRetries = 10 }: IPDOXConstructor = {
-			cacheTimeout: 43200000,
+		{
+			cacheMaxItems = 1000,
+			cacheMaxAge = 43200000,
+			maxRetries = 10
+		}: IPDOXConstructor = {
+			cacheMaxItems: 1000,
+			cacheMaxAge: 43200000,
 			maxRetries: 10
 		}
 	) {
-		this.cache = new Map<string, IPDOXResponse>();
-		this.cacheTimeout = cacheTimeout;
+		this.cache = new LRUCache<string, IPDOXResponse>({
+			max: cacheMaxItems,
+			ttl: cacheMaxAge
+		});
 		this.maxRetries = maxRetries;
 	}
 
@@ -44,6 +52,7 @@ class IPDox {
 			const cachedResponse = this.cache.get(ip);
 
 			if (cachedResponse) {
+				console.log(`Cache hit for IP: ${ip}`);
 				return cachedResponse;
 			}
 		}
@@ -99,8 +108,7 @@ class IPDox {
 
 	private cacheResponse(ip: string, response: IPDOXResponse): void {
 		this.cache.set(ip, response);
-		// Remove from cache after timeout
-		setTimeout(() => this.cache.delete(ip), this.cacheTimeout);
+		console.log(`Cached response for IP: ${ip}`);
 	}
 
 	private async fetchIPHyphenAPIDotCom(ip: string): Promise<IPDOXResponse> {
@@ -108,7 +116,7 @@ class IPDox {
 		const response = await axios.get(requestURL);
 
 		if (response.data.status === "success") {
-			const formattedResponse = {
+			const formattedResponse: IPDOXResponse = {
 				ip: response.data.query,
 				country: response.data.countryCode,
 				city: response.data.city,
@@ -135,7 +143,7 @@ class IPDox {
 		const response = await axios.get(requestURL);
 
 		if (response.data.ipVersion === 4) {
-			const formattedResponse = {
+			const formattedResponse: IPDOXResponse = {
 				ip: response.data.ipAddress,
 				country: response.data.countryCode,
 				city: response.data.cityName,
@@ -162,7 +170,7 @@ class IPDox {
 		const response = await axios.get(requestURL);
 
 		if (response.data.success) {
-			const formattedResponse = {
+			const formattedResponse: IPDOXResponse = {
 				ip: response.data.ip,
 				country: response.data.country_code,
 				city: response.data.city,
@@ -189,7 +197,7 @@ class IPDox {
 		const response = await axios.get(requestURL);
 
 		if (response.data.ip) {
-			const formattedResponse = {
+			const formattedResponse: IPDOXResponse = {
 				ip: response.data.ip,
 				country: response.data.country_code,
 				city: response.data.city,

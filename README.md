@@ -15,7 +15,11 @@ npm install node-ipdox --save
 ```javascript
 import { IPDox } from "node-ipdox";
 
-const ipdox = new IPDox({ cacheTimeout: 43200000, maxRetries: 10 });
+const ipdox = new IPDox({
+        cacheMaxItems = 1000,
+        cacheMaxAge = 43200000,
+        maxRetries: 10
+    });
 
 ipdox
 	.doxIP({ ip: "8.8.8.8" })
@@ -25,11 +29,12 @@ ipdox
 
 ## API
 
-### `new IPDox({ cacheTimeout, maxRetries })`
+### `new IPDox({ cacheMaxItems, cacheMaxAge, maxRetries })`
 
 Creates a new instance of IPDox.
 
-- `cacheTimeout` - The cache timeout in milliseconds (default: 43200000 (12 hours))
+- `cacheMaxItems` - The maximum number of items to store in the cache (default: 1000)
+- `cacheMaxAge` - The cache timeout in milliseconds (default: 43200000 (12 hours))
 - `maxRetries` - Maximum number of retries if an API request fails (default: 10)
 
 ### `ipdox.doxIP({ ip })`
@@ -39,6 +44,8 @@ Fetches geolocation data for the specified IP address.
 - `ip` - IP address
 
 Returns a Promise that resolves to an `IPDOXResponse` object.
+
+If no response is found, undefined is returned.
 
 ## IPDOXResponse
 
