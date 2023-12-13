@@ -10,20 +10,24 @@ class IPDox {
 	private maxRetries: number;
 
 	/**
-	 * @description Creates an instance of ListSubscribers.
+	 * @description Creates an instance of IPDox.
 	 * @param {IPDOXConstructor} params - Params of the constructor
 	 * @param {number} params.cacheTimeout - The cache timeout in milliseconds (default: 43200000 (12 hours))
-	 *
-	 *
+	 * @param {number} params.maxRetries - The maximum number of retries (default: 10)
 	 */
-	constructor({ cacheTimeout = 43200000, maxRetries = 10 }: IPDOXConstructor) {
+	constructor(
+		{ cacheTimeout = 43200000, maxRetries = 10 }: IPDOXConstructor = {
+			cacheTimeout: 43200000,
+			maxRetries: 10
+		}
+	) {
 		this.cache = new Map<string, IPDOXResponse>();
 		this.cacheTimeout = cacheTimeout;
 		this.maxRetries = maxRetries;
 	}
 
 	/**
-	 * @description Get all the subscribers of a list
+	 * @description Get information about an IP address
 	 * @param {IPDOXRequest} params - Params of the request
 	 * @param {string} params.ip - IP address
 	 * @returns {Promise<IPDOXResponse>} - Promise of the response
