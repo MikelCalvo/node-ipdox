@@ -1,6 +1,6 @@
 {
 	"name": "node-ipdox",
-	"version": "0.0.1",
+	"version": "1.0.0",
 	"description": "",
 	"author": "Mikel Calvo <contact@mikecalvo.net> (www.mikelcalvo.net)",
 	"keywords": ["geoip", "ip lookup", "ipdoxxing"],
