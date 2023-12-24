@@ -52,7 +52,6 @@ class IPDox {
 			const cachedResponse = this.cache.get(ip);
 
 			if (cachedResponse) {
-				console.log(`Cache hit for IP: ${ip}`);
 				return cachedResponse;
 			}
 		}
@@ -108,7 +107,6 @@ class IPDox {
 
 	private cacheResponse(ip: string, response: IPDOXResponse): void {
 		this.cache.set(ip, response);
-		console.log(`Cached response for IP: ${ip}`);
 	}
 
 	private async fetchIPHyphenAPIDotCom(ip: string): Promise<IPDOXResponse> {
