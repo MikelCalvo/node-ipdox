@@ -16,10 +16,10 @@ npm install node-ipdox --save
 import { IPDox } from "node-ipdox";
 
 const ipdox = new IPDox({
-        cacheMaxItems = 1000,
-        cacheMaxAge = 43200000,
-        maxRetries: 10
-    });
+	cacheMaxItems: 5000,
+	cacheMaxAge: 43200000,
+	maxRetries: 10,
+});
 
 ipdox
 	.doxIP({ ip: "8.8.8.8" })
