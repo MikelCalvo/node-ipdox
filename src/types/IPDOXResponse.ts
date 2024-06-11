@@ -16,6 +16,7 @@
  * @property {boolean} proxyInfo.isVPN Is the IP address a VPN?
  * @property {boolean} proxyInfo.isTOR Is the IP address a TOR node?
  * @property {boolean} proxyInfo.isProxy Is the IP address a proxy?
+ * @property {string} timeZone The time zone
  * @property {string} source The source of the data
  */
 export interface IPDOXResponse {
@@ -34,5 +35,6 @@ export interface IPDOXResponse {
 		isTOR: boolean;
 		isProxy: boolean;
 	};
+	timeZone?: string;
 	source: string;
 }

@@ -125,6 +125,7 @@ class IPDox {
 				isp: response.data.isp,
 				proxy: response.data.proxy,
 				isHosting: response.data.hosting,
+				timeZone: response.data.timezone,
 				source: "ip-api.com"
 			};
 
@@ -152,6 +153,7 @@ class IPDox {
 				isp: response.data.isp,
 				proxy: response.data.proxy,
 				isHosting: response.data.hosting,
+				timeZone: response.data.timeZones[0],
 				source: "freeipapi.com"
 			};
 
@@ -179,6 +181,7 @@ class IPDox {
 				isp: response.data.connection.isp,
 				proxy: false,
 				isHosting: false,
+				timeZone: response.data.timezone.id,
 				source: "ipwho.is"
 			};
 
@@ -204,6 +207,7 @@ class IPDox {
 				longitude: response.data.longitude,
 				zip: response.data.postal,
 				isp: response.data.org,
+				timeZone: response.data.timezone,
 				source: "ipapi.co"
 			};
 

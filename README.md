@@ -18,7 +18,7 @@ import { IPDox } from "node-ipdox";
 const ipdox = new IPDox({
 	cacheMaxItems: 5000,
 	cacheMaxAge: 43200000,
-	maxRetries: 10,
+	maxRetries: 10
 });
 
 ipdox
@@ -69,6 +69,7 @@ export interface IPDOXResponse {
 		isTOR: boolean; // Boolean indicating if the IP address is a TOR node (might be undefined)
 		isProxy: boolean; // Boolean indicating if the IP address is a proxy (might be undefined)
 	};
+	timeZone: string; // Time zone
 	source: string; // Source API
 }
 ```
