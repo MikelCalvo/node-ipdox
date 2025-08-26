@@ -15,28 +15,26 @@
 	"license": "ISC",
 	"readmeFilename": "README.md",
 	"homepage": "https://github.com/mikelcalvo/ipdox#readme",
-	"bugs": {
-		"url": "https://github.com/mikelcalvo/ipdox/issues"
-	},
+	"bugs": { "url": "https://github.com/mikelcalvo/ipdox/issues" },
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"files": ["dist"],
 	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1",
-		"format": "prettier --write \"**/*.ts\" \"**/*.js\" \"**/*.json\"",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:integration": "RUN_INTEGRATION=1 vitest run src/integration/ipdox.providers.int.test.ts",
+		"format": "prettier --write \"**/*.ts\" \"**/*.js\" \"**/*.json\" --ignore-path .prettierignore",
 		"build": "tsc"
 	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/mikelcalvo/node-ipdox.git"
 	},
-	"dependencies": {
-		"axios": "1.11.0",
-		"lru-cache": "^11.1.0"
-	},
+	"dependencies": { "axios": "1.11.0", "lru-cache": "^11.1.0" },
 	"devDependencies": {
 		"@types/node": "24.3.0",
 		"prettier": "3.6.2",
-		"typescript": "^5.9.2"
+		"typescript": "^5.9.2",
+		"vitest": "3.2.4"
 	}
 }
