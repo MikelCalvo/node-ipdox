@@ -8,14 +8,14 @@ export const IPDox = _IPDox;
 /**
  * Constructor type
  */
-export { IPDOXConstructor } from "./types/IPDOXConstructor";
+export type { IPDOXConstructor } from "./types/IPDOXConstructor";
 
 /**
  * Params type
  */
-export { IPDOXRequest } from "./types/IPDOXRequest";
+export type { IPDOXRequest } from "./types/IPDOXRequest";
 
 /**
  * Response type
  */
-export { IPDOXResponse } from "./types/IPDOXResponse";
+export type { IPDOXResponse } from "./types/IPDOXResponse";
