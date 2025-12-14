@@ -14,8 +14,8 @@
 	],
 	"license": "ISC",
 	"readmeFilename": "README.md",
-	"homepage": "https://github.com/mikelcalvo/ipdox#readme",
-	"bugs": { "url": "https://github.com/mikelcalvo/ipdox/issues" },
+	"homepage": "https://github.com/MikelCalvo/ipdox#readme",
+	"bugs": { "url": "https://github.com/MikelCalvo/ipdox/issues" },
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"files": ["dist"],
@@ -28,7 +28,11 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/mikelcalvo/node-ipdox.git"
+		"url": "git+https://github.com/MikelCalvo/node-ipdox.git"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
 	},
 	"dependencies": { "axios": "1.13.2", "lru-cache": "^11.2.4" },
 	"devDependencies": {
