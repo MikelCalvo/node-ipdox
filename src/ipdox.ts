@@ -1,8 +1,8 @@
 import axios from "axios";
-import { IPDOXRequest } from "./types/IPDOXRequest";
-import { IPDOXResponse } from "./types/IPDOXResponse";
-import { IPDOXConstructor } from "./types/IPDOXConstructor";
-import { GeoAPIs } from "./utils/apis";
+import { IPDOXRequest } from "./types/IPDOXRequest.js";
+import { IPDOXResponse } from "./types/IPDOXResponse.js";
+import { IPDOXConstructor } from "./types/IPDOXConstructor.js";
+import { GeoAPIs } from "./utils/apis.js";
 import { LRUCache } from "lru-cache";
 
 class IPDox {

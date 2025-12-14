@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { IPDox } from "../index";
+import { IPDox } from "../index.js";
 
 const RUN = process.env.RUN_INTEGRATION === "1";
 const TEST_IP = process.env.TEST_IP || "8.8.8.8";
