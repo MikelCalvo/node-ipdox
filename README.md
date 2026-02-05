@@ -18,7 +18,8 @@ import { IPDox } from "node-ipdox";
 const ipdox = new IPDox({
 	cacheMaxItems: 5000,
 	cacheMaxAge: 43200000,
-	maxRetries: 10
+	maxRetries: 10,
+	requestTimeoutMs: 5000
 });
 
 ipdox
@@ -29,13 +30,14 @@ ipdox
 
 ## API
 
-### `new IPDox({ cacheMaxItems, cacheMaxAge, maxRetries })`
+### `new IPDox({ cacheMaxItems, cacheMaxAge, maxRetries, requestTimeoutMs })`
 
 Creates a new instance of IPDox.
 
 - `cacheMaxItems` - The maximum number of items to store in the cache (default: 1000)
 - `cacheMaxAge` - The cache timeout in milliseconds (default: 43200000 (12 hours))
 - `maxRetries` - Maximum number of retries if an API request fails (default: 10)
+- `requestTimeoutMs` - Request timeout in milliseconds (default: 5000)
 
 ### `ipdox.doxIP({ ip })`
 
@@ -45,7 +47,7 @@ Fetches geolocation data for the specified IP address.
 
 Returns a Promise that resolves to an `IPDOXResponse` object.
 
-If no response is found, undefined is returned.
+If no response is found or the IP is invalid, undefined is returned.
 
 ## IPDOXResponse
 
@@ -59,8 +61,8 @@ export interface IPDOXResponse {
 	continent: string; // Continent ISO code
 	latitude: number; // Latitude
 	longitude: number; // Longitude
-	zip: string; // Zip code
-	isp: string; // ISP name
+	zip?: string; // Zip code (might be undefined)
+	isp?: string; // ISP name (might be undefined)
 	proxy?: boolean; // Boolean indicating if the IP address is a proxy (might be undefined)
 	isHosting?: boolean; // Boolean indicating if the IP address is a hosting provider (might be undefined)
 	proxyInfo?: {

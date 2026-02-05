@@ -8,8 +8,8 @@
  * @property {string} continent The continent (ISO 3166)
  * @property {number} latitude The latitude
  * @property {number} longitude The longitude
- * @property {string} zip The ZIP code
- * @property {string} isp The ISP (Internet Service Provider)
+ * @property {string} zip The ZIP code (might be undefined)
+ * @property {string} isp The ISP (Internet Service Provider) (might be undefined)
  * @property {boolean} proxy Is the IP address a proxy?
  * @property {boolean} isHosting Is the IP address a hosting provider?
  * @property {object} proxyInfo Information about the proxy
@@ -26,8 +26,8 @@ export interface IPDOXResponse {
 	continent: string;
 	latitude: number;
 	longitude: number;
-	zip: string;
-	isp: string;
+	zip?: string;
+	isp?: string;
 	proxy?: boolean;
 	isHosting?: boolean;
 	proxyInfo?: {

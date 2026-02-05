@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import axios from "axios";
 import { IPDOXRequest } from "./types/IPDOXRequest.js";
 import { IPDOXResponse } from "./types/IPDOXResponse.js";
@@ -5,9 +6,13 @@ import { IPDOXConstructor } from "./types/IPDOXConstructor.js";
 import { GeoAPIs } from "./utils/apis.js";
 import { LRUCache } from "lru-cache";
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
+
 class IPDox {
 	private cache: LRUCache<string, IPDOXResponse>;
 	private maxRetries: number;
+	private requestTimeoutMs: number;
+	private inFlight: Map<string, Promise<IPDOXResponse | undefined>>;
 
 	/**
 	 * @description Creates an instance of IPDox.
@@ -20,18 +25,23 @@ class IPDox {
 		{
 			cacheMaxItems = 1000,
 			cacheMaxAge = 43200000,
-			maxRetries = 10
+			maxRetries = 10,
+			requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS
 		}: IPDOXConstructor = {
 			cacheMaxItems: 1000,
 			cacheMaxAge: 43200000,
-			maxRetries: 10
+			maxRetries: 10,
+			requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS
 		}
 	) {
 		this.cache = new LRUCache<string, IPDOXResponse>({
 			max: cacheMaxItems,
-			ttl: cacheMaxAge
+			ttl: cacheMaxAge,
+			ttlAutopurge: true
 		});
 		this.maxRetries = maxRetries;
+		this.requestTimeoutMs = requestTimeoutMs;
+		this.inFlight = new Map();
 	}
 
 	/**
@@ -42,67 +52,94 @@ class IPDox {
 	 * @memberof IPDox
 	 */
 	async doxIP({ ip }: IPDOXRequest): Promise<IPDOXResponse | undefined> {
+		const normalizedIP = typeof ip === "string" ? ip.trim() : "";
 		// Check that the ip is valid
-		if (!ip || ip === "") {
+		if (!normalizedIP || isIP(normalizedIP) === 0) {
 			return undefined;
 		}
 
 		// Check if the IP is already in the cache
-		if (this.cache.has(ip)) {
-			const cachedResponse = this.cache.get(ip);
-
-			if (cachedResponse) {
-				return cachedResponse;
-			}
+		const cachedResponse = this.cache.get(normalizedIP);
+		if (cachedResponse) {
+			return cachedResponse;
 		}
 
-		// Select a random API
-		let randomAPI = this.selectRandomAPI();
-		let response: IPDOXResponse | null = null;
-		let retries = 0;
-
-		// Fetch data from the API
-		while (!response && retries < this.maxRetries) {
-			try {
-				switch (randomAPI) {
-					case GeoAPIs.IP_HYPHEN_API_DOT_COM:
-						response = await this.fetchIPHyphenAPIDotCom(ip);
-						break;
-					case GeoAPIs.FREE_IP_API_DOT_COM:
-						response = await this.fetchFreeIPAPIDotCom(ip);
-						break;
-					case GeoAPIs.IPWHO_DOT_IS:
-						response = await this.fetchIPWhoDotIs(ip);
-						break;
-					case GeoAPIs.IPAPI_DOT_CO:
-						response = await this.fetchIPAPIDotCo(ip);
-						break;
-				}
-			} catch (error) {
-				// If the promise is rejected, select another random API and try again
-				randomAPI = this.selectRandomAPI();
-				retries++;
-			}
+		// Check if there's an ongoing request for the same IP
+		const inFlight = this.inFlight.get(normalizedIP);
+		if (inFlight) {
+			return inFlight;
 		}
 
-		// If max retries reached and no response, return undefined
-		if (retries === this.maxRetries && !response) {
+		const task = this.fetchWithRetries(normalizedIP);
+		this.inFlight.set(normalizedIP, task);
+		task.finally(() => this.inFlight.delete(normalizedIP));
+
+		return task;
+	}
+
+	private shuffleProviders(providers: GeoAPIs[], avoidFirst?: GeoAPIs): GeoAPIs[] {
+		const shuffled = [...providers];
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+
+		if (avoidFirst && shuffled.length > 1 && shuffled[0] === avoidFirst) {
+			[shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
+		}
+
+		return shuffled;
+	}
+
+	private async fetchWithRetries(
+		ip: string
+	): Promise<IPDOXResponse | undefined> {
+		const providers = Object.values(GeoAPIs) as GeoAPIs[];
+		if (providers.length === 0 || this.maxRetries <= 0) {
 			return undefined;
 		}
 
-		// Return the response
-		return response ? response : undefined;
+		let attempts = 0;
+		let order = this.shuffleProviders(providers);
+		let index = 0;
+		let lastProvider: GeoAPIs | undefined;
+
+		while (attempts < this.maxRetries) {
+			if (index >= order.length) {
+				order = this.shuffleProviders(providers, lastProvider);
+				index = 0;
+			}
+
+			const provider = order[index];
+			index++;
+			lastProvider = provider;
+
+			try {
+				return await this.fetchFromProvider(provider, ip);
+			} catch {
+				attempts++;
+			}
+		}
+
+		return undefined;
 	}
 
-	private selectRandomAPI(): GeoAPIs {
-		// Get a random entry from the enum
-		const randomEntry =
-			Object.entries(GeoAPIs)[
-				Math.floor(Math.random() * Object.entries(GeoAPIs).length)
-			];
-
-		// Return the random entry
-		return randomEntry[1];
+	private async fetchFromProvider(
+		provider: GeoAPIs,
+		ip: string
+	): Promise<IPDOXResponse> {
+		switch (provider) {
+			case GeoAPIs.IP_HYPHEN_API_DOT_COM:
+				return this.fetchIPHyphenAPIDotCom(ip);
+			case GeoAPIs.FREE_IP_API_DOT_COM:
+				return this.fetchFreeIPAPIDotCom(ip);
+			case GeoAPIs.IPWHO_DOT_IS:
+				return this.fetchIPWhoDotIs(ip);
+			case GeoAPIs.IPAPI_DOT_CO:
+				return this.fetchIPAPIDotCo(ip);
+			default:
+				throw new Error("Unsupported provider");
+		}
 	}
 
 	private cacheResponse(ip: string, response: IPDOXResponse): void {
@@ -111,9 +148,31 @@ class IPDox {
 
 	private async fetchIPHyphenAPIDotCom(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.IP_HYPHEN_API_DOT_COM + ip + "?fields=24899583";
-		const response = await axios.get(requestURL);
+		const response = await axios.get(requestURL, {
+			timeout: this.requestTimeoutMs
+		});
 
 		if (response.data.status === "success") {
+			const zip =
+				typeof response.data.zip === "string" && response.data.zip !== ""
+					? response.data.zip
+					: undefined;
+			const isp =
+				typeof response.data.isp === "string" && response.data.isp !== ""
+					? response.data.isp
+					: undefined;
+			const proxy =
+				typeof response.data.proxy === "boolean"
+					? response.data.proxy
+					: undefined;
+			const isHosting =
+				typeof response.data.hosting === "boolean"
+					? response.data.hosting
+					: undefined;
+			const timeZone =
+				typeof response.data.timezone === "string"
+					? response.data.timezone
+					: undefined;
 			const formattedResponse: IPDOXResponse = {
 				ip: response.data.query,
 				country: response.data.countryCode,
@@ -121,11 +180,11 @@ class IPDox {
 				continent: response.data.continentCode,
 				latitude: response.data.lat,
 				longitude: response.data.lon,
-				zip: response.data.zip,
-				isp: response.data.isp,
-				proxy: response.data.proxy,
-				isHosting: response.data.hosting,
-				timeZone: response.data.timezone,
+				zip,
+				isp,
+				proxy,
+				isHosting,
+				timeZone,
 				source: "ip-api.com"
 			};
 
@@ -139,9 +198,33 @@ class IPDox {
 
 	private async fetchFreeIPAPIDotCom(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.FREE_IP_API_DOT_COM + ip;
-		const response = await axios.get(requestURL);
+		const response = await axios.get(requestURL, {
+			timeout: this.requestTimeoutMs
+		});
 
-		if (response.data.ipVersion === 4) {
+		if (response.data.ipVersion === 4 || response.data.ipVersion === 6) {
+			const zip =
+				typeof response.data.zipCode === "string" &&
+				response.data.zipCode !== ""
+					? response.data.zipCode
+					: undefined;
+			const isp =
+				typeof response.data.isp === "string" && response.data.isp !== ""
+					? response.data.isp
+					: undefined;
+			const proxy =
+				typeof response.data.proxy === "boolean"
+					? response.data.proxy
+					: undefined;
+			const isHosting =
+				typeof response.data.hosting === "boolean"
+					? response.data.hosting
+					: undefined;
+			const timeZone =
+				Array.isArray(response.data.timeZones) &&
+				typeof response.data.timeZones[0] === "string"
+					? response.data.timeZones[0]
+					: undefined;
 			const formattedResponse: IPDOXResponse = {
 				ip: response.data.ipAddress,
 				country: response.data.countryCode,
@@ -149,11 +232,11 @@ class IPDox {
 				continent: response.data.continentCode,
 				latitude: response.data.latitude,
 				longitude: response.data.longitude,
-				zip: response.data.zipCode,
-				isp: response.data.isp,
-				proxy: response.data.proxy,
-				isHosting: response.data.hosting,
-				timeZone: response.data.timeZones[0],
+				zip,
+				isp,
+				proxy,
+				isHosting,
+				timeZone,
 				source: "freeipapi.com"
 			};
 
@@ -167,9 +250,35 @@ class IPDox {
 
 	private async fetchIPWhoDotIs(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.IPWHO_DOT_IS + ip;
-		const response = await axios.get(requestURL);
+		const response = await axios.get(requestURL, {
+			timeout: this.requestTimeoutMs
+		});
 
 		if (response.data.success) {
+			const zip =
+				typeof response.data.postal === "string" &&
+				response.data.postal !== ""
+					? response.data.postal
+					: undefined;
+			const isp =
+				typeof response.data.connection?.isp === "string" &&
+				response.data.connection.isp !== ""
+					? response.data.connection.isp
+					: undefined;
+			const proxy =
+				typeof response.data.proxy === "boolean"
+					? response.data.proxy
+					: undefined;
+			const isHosting =
+				typeof response.data.hosting === "boolean"
+					? response.data.hosting
+					: undefined;
+			const timeZone =
+				typeof response.data.timezone?.id === "string"
+					? response.data.timezone.id
+					: typeof response.data.timezone === "string"
+						? response.data.timezone
+						: undefined;
 			const formattedResponse: IPDOXResponse = {
 				ip: response.data.ip,
 				country: response.data.country_code,
@@ -177,11 +286,11 @@ class IPDox {
 				continent: response.data.continent_code,
 				latitude: response.data.latitude,
 				longitude: response.data.longitude,
-				zip: response.data.postal,
-				isp: response.data.connection.isp,
-				proxy: false,
-				isHosting: false,
-				timeZone: response.data.timezone.id,
+				zip,
+				isp,
+				proxy,
+				isHosting,
+				timeZone,
 				source: "ipwho.is"
 			};
 
@@ -195,9 +304,24 @@ class IPDox {
 
 	private async fetchIPAPIDotCo(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.IPAPI_DOT_CO + ip + "/json";
-		const response = await axios.get(requestURL);
+		const response = await axios.get(requestURL, {
+			timeout: this.requestTimeoutMs
+		});
 
 		if (response.data.ip) {
+			const zip =
+				typeof response.data.postal === "string" &&
+				response.data.postal !== ""
+					? response.data.postal
+					: undefined;
+			const isp =
+				typeof response.data.org === "string" && response.data.org !== ""
+					? response.data.org
+					: undefined;
+			const timeZone =
+				typeof response.data.timezone === "string"
+					? response.data.timezone
+					: undefined;
 			const formattedResponse: IPDOXResponse = {
 				ip: response.data.ip,
 				country: response.data.country_code,
@@ -205,9 +329,9 @@ class IPDox {
 				continent: response.data.continent_code,
 				latitude: response.data.latitude,
 				longitude: response.data.longitude,
-				zip: response.data.postal,
-				isp: response.data.org,
-				timeZone: response.data.timezone,
+				zip,
+				isp,
+				timeZone,
 				source: "ipapi.co"
 			};
 

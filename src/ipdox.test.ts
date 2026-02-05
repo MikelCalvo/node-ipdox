@@ -17,6 +17,12 @@ describe("IPDox", () => {
 		expect(res).toBeUndefined();
 	});
 
+	it("returns undefined for invalid ip", async () => {
+		const ipdox = new IPDox();
+		const res = await ipdox.doxIP({ ip: "not-an-ip" });
+		expect(res).toBeUndefined();
+	});
+
 	it("formats response from ipwho.is provider", async () => {
 		const ipdox = new IPDox({ maxRetries: 1 });
 		mockedAxios.get = vi.fn().mockResolvedValue({
