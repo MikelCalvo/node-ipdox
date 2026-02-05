@@ -137,8 +137,67 @@ class IPDox {
 				return this.fetchIPWhoDotIs(ip);
 			case GeoAPIs.IPAPI_DOT_CO:
 				return this.fetchIPAPIDotCo(ip);
+			case GeoAPIs.GEOIP_VUIZ_DOT_NET:
+				return this.fetchGeoIPVuizDotNet(ip);
+			case GeoAPIs.APIP_DOT_CC:
+				return this.fetchAPIPDotCC(ip);
+			case GeoAPIs.IP_SONAR_DOT_COM:
+				return this.fetchIPSonarDotCom(ip);
 			default:
 				throw new Error("Unsupported provider");
+		}
+	}
+
+	private parseNumber(value: unknown): number | undefined {
+		if (typeof value === "number" && Number.isFinite(value)) {
+			return value;
+		}
+
+		if (typeof value === "string") {
+			const trimmed = value.trim();
+			if (trimmed !== "") {
+				const parsed = Number.parseFloat(trimmed);
+				if (Number.isFinite(parsed)) {
+					return parsed;
+				}
+			}
+		}
+
+		return undefined;
+	}
+
+	private parseString(value: unknown): string | undefined {
+		if (typeof value === "string") {
+			const trimmed = value.trim();
+			return trimmed === "" ? undefined : trimmed;
+		}
+
+		return undefined;
+	}
+
+	private normalizeContinentCode(continentName: unknown): string | undefined {
+		const name = this.parseString(continentName)?.toLowerCase();
+		if (!name) {
+			return undefined;
+		}
+
+		switch (name) {
+			case "north america":
+				return "NA";
+			case "south america":
+				return "SA";
+			case "europe":
+				return "EU";
+			case "africa":
+				return "AF";
+			case "asia":
+				return "AS";
+			case "oceania":
+				return "OC";
+			case "antarctica":
+				return "AN";
+			default:
+				return undefined;
 		}
 	}
 
@@ -341,6 +400,153 @@ class IPDox {
 		} else {
 			return Promise.reject();
 		}
+	}
+
+	private async fetchGeoIPVuizDotNet(ip: string): Promise<IPDOXResponse> {
+		const requestURL =
+			GeoAPIs.GEOIP_VUIZ_DOT_NET + "?ip=" + encodeURIComponent(ip);
+		const response = await axios.get(requestURL, {
+			timeout: this.requestTimeoutMs
+		});
+		const data = response.data;
+
+		const responseIP = this.parseString(data?.ip);
+		const country = this.parseString(data?.countryCode);
+		const city = this.parseString(data?.city);
+		const continent = this.normalizeContinentCode(data?.continent);
+		const latitude = this.parseNumber(data?.lat);
+		const longitude = this.parseNumber(data?.lon);
+
+		if (
+			responseIP &&
+			country &&
+			city &&
+			continent &&
+			latitude !== undefined &&
+			longitude !== undefined
+		) {
+			const zip = this.parseString(data?.zip);
+			const isp = this.parseString(data?.isp);
+			const timeZone = this.parseString(data?.timezone);
+
+			const formattedResponse: IPDOXResponse = {
+				ip: responseIP,
+				country,
+				city,
+				continent,
+				latitude,
+				longitude,
+				zip,
+				isp,
+				timeZone,
+				source: "geoip.vuiz.net"
+			};
+
+			this.cacheResponse(ip, formattedResponse);
+
+			return Promise.resolve(formattedResponse);
+		}
+
+		return Promise.reject();
+	}
+
+	private async fetchAPIPDotCC(ip: string): Promise<IPDOXResponse> {
+		const requestURL = GeoAPIs.APIP_DOT_CC + encodeURIComponent(ip);
+		const response = await axios.get(requestURL, {
+			timeout: this.requestTimeoutMs
+		});
+		const data = response.data;
+
+		if (data?.status && data.status !== "success") {
+			return Promise.reject();
+		}
+
+		const responseIP = this.parseString(data?.ip);
+		const country = this.parseString(data?.CountryCode);
+		const city = this.parseString(data?.City);
+		const continent = this.parseString(data?.ContinentCode);
+		const latitude = this.parseNumber(data?.Latitude);
+		const longitude = this.parseNumber(data?.Longitude);
+
+		if (
+			responseIP &&
+			country &&
+			city &&
+			continent &&
+			latitude !== undefined &&
+			longitude !== undefined
+		) {
+			const zip = this.parseString(data?.Postal);
+			const isp =
+				this.parseString(data?.org) ||
+				this.parseString(data?.Org) ||
+				this.parseString(data?.ISP);
+			const timeZone = this.parseString(data?.TimeZone);
+
+			const formattedResponse: IPDOXResponse = {
+				ip: responseIP,
+				country,
+				city,
+				continent,
+				latitude,
+				longitude,
+				zip,
+				isp,
+				timeZone,
+				source: "apip.cc"
+			};
+
+			this.cacheResponse(ip, formattedResponse);
+
+			return Promise.resolve(formattedResponse);
+		}
+
+		return Promise.reject();
+	}
+
+	private async fetchIPSonarDotCom(ip: string): Promise<IPDOXResponse> {
+		const requestURL = GeoAPIs.IP_SONAR_DOT_COM + encodeURIComponent(ip);
+		const response = await axios.get(requestURL, {
+			timeout: this.requestTimeoutMs
+		});
+		const data = response.data;
+
+		const responseIP = this.parseString(data?.ip);
+		const country = this.parseString(data?.country_code);
+		const city = this.parseString(data?.city_name);
+		const continent = this.parseString(data?.continent_code);
+		const latitude = this.parseNumber(data?.latitude);
+		const longitude = this.parseNumber(data?.longitude);
+
+		if (
+			responseIP &&
+			country &&
+			city &&
+			continent &&
+			latitude !== undefined &&
+			longitude !== undefined
+		) {
+			const zip = this.parseString(data?.postal_code);
+			const timeZone = this.parseString(data?.timezone);
+
+			const formattedResponse: IPDOXResponse = {
+				ip: responseIP,
+				country,
+				city,
+				continent,
+				latitude,
+				longitude,
+				zip,
+				timeZone,
+				source: "ip-sonar.com"
+			};
+
+			this.cacheResponse(ip, formattedResponse);
+
+			return Promise.resolve(formattedResponse);
+		}
+
+		return Promise.reject();
 	}
 }
 

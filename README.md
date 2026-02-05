@@ -4,6 +4,18 @@
 
 IPDox is a simple and efficient IP geolocation library for Node.js. It fetches data from multiple geolocation APIs and provides a unified response. It also includes a caching mechanism to prevent unnecessary requests.
 
+## Providers
+
+Current keyless providers used:
+
+- ip-api.com
+- ipwho.is
+- freeipapi.com
+- ipapi.co
+- geoip.vuiz.net
+- apip.cc
+- ip-sonar.com
+
 ## Installation
 
 ```bash

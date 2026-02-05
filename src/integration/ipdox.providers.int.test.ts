@@ -41,4 +41,31 @@ const TEST_IP = process.env.TEST_IP || "8.8.8.8";
 		expect(r.source).toBe("ipapi.co");
 		expect(r.ip).toBeTypeOf("string");
 	}, 20_000);
+
+	it("geoip.vuiz.net", async () => {
+		const ipdox = new IPDox({ maxRetries: 1 });
+		// @ts-expect-error call provider directly to avoid randomness
+		const r = await ipdox.fetchGeoIPVuizDotNet(TEST_IP);
+		expect(r).toBeTruthy();
+		expect(r.source).toBe("geoip.vuiz.net");
+		expect(r.ip).toBeTypeOf("string");
+	}, 20_000);
+
+	it("apip.cc", async () => {
+		const ipdox = new IPDox({ maxRetries: 1 });
+		// @ts-expect-error call provider directly to avoid randomness
+		const r = await ipdox.fetchAPIPDotCC(TEST_IP);
+		expect(r).toBeTruthy();
+		expect(r.source).toBe("apip.cc");
+		expect(r.ip).toBeTypeOf("string");
+	}, 20_000);
+
+	it("ip-sonar.com", async () => {
+		const ipdox = new IPDox({ maxRetries: 1 });
+		// @ts-expect-error call provider directly to avoid randomness
+		const r = await ipdox.fetchIPSonarDotCom(TEST_IP);
+		expect(r).toBeTruthy();
+		expect(r.source).toBe("ip-sonar.com");
+		expect(r.ip).toBeTypeOf("string");
+	}, 20_000);
 });
