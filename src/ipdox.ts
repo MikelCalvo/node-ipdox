@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import axios from "axios";
+import axios, { type AxiosInstance } from "axios";
 import { IPDOXRequest } from "./types/IPDOXRequest.js";
 import { IPDOXResponse } from "./types/IPDOXResponse.js";
 import { IPDOXConstructor } from "./types/IPDOXConstructor.js";
@@ -7,12 +7,14 @@ import { GeoAPIs } from "./utils/apis.js";
 import { LRUCache } from "lru-cache";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
+const DEFAULT_USER_AGENT = "node-ipdox";
 
 class IPDox {
 	private cache: LRUCache<string, IPDOXResponse>;
 	private maxRetries: number;
 	private requestTimeoutMs: number;
 	private inFlight: Map<string, Promise<IPDOXResponse | undefined>>;
+	private http: AxiosInstance;
 
 	/**
 	 * @description Creates an instance of IPDox.
@@ -42,6 +44,13 @@ class IPDox {
 		this.maxRetries = maxRetries;
 		this.requestTimeoutMs = requestTimeoutMs;
 		this.inFlight = new Map();
+		this.http = axios.create({
+			timeout: this.requestTimeoutMs,
+			headers: {
+				"User-Agent": DEFAULT_USER_AGENT
+			},
+			validateStatus: status => status >= 200 && status < 500
+		});
 	}
 
 	/**
@@ -207,9 +216,7 @@ class IPDox {
 
 	private async fetchIPHyphenAPIDotCom(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.IP_HYPHEN_API_DOT_COM + ip + "?fields=24899583";
-		const response = await axios.get(requestURL, {
-			timeout: this.requestTimeoutMs
-		});
+		const response = await this.http.get(requestURL);
 
 		if (response.data.status === "success") {
 			const zip =
@@ -257,9 +264,7 @@ class IPDox {
 
 	private async fetchFreeIPAPIDotCom(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.FREE_IP_API_DOT_COM + ip;
-		const response = await axios.get(requestURL, {
-			timeout: this.requestTimeoutMs
-		});
+		const response = await this.http.get(requestURL);
 
 		if (response.data.ipVersion === 4 || response.data.ipVersion === 6) {
 			const zip =
@@ -309,9 +314,7 @@ class IPDox {
 
 	private async fetchIPWhoDotIs(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.IPWHO_DOT_IS + ip;
-		const response = await axios.get(requestURL, {
-			timeout: this.requestTimeoutMs
-		});
+		const response = await this.http.get(requestURL);
 
 		if (response.data.success) {
 			const zip =
@@ -363,9 +366,7 @@ class IPDox {
 
 	private async fetchIPAPIDotCo(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.IPAPI_DOT_CO + ip + "/json";
-		const response = await axios.get(requestURL, {
-			timeout: this.requestTimeoutMs
-		});
+		const response = await this.http.get(requestURL);
 
 		if (response.data.ip) {
 			const zip =
@@ -405,9 +406,7 @@ class IPDox {
 	private async fetchGeoIPVuizDotNet(ip: string): Promise<IPDOXResponse> {
 		const requestURL =
 			GeoAPIs.GEOIP_VUIZ_DOT_NET + "?ip=" + encodeURIComponent(ip);
-		const response = await axios.get(requestURL, {
-			timeout: this.requestTimeoutMs
-		});
+		const response = await this.http.get(requestURL);
 		const data = response.data;
 
 		const responseIP = this.parseString(data?.ip);
@@ -452,9 +451,7 @@ class IPDox {
 
 	private async fetchAPIPDotCC(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.APIP_DOT_CC + encodeURIComponent(ip);
-		const response = await axios.get(requestURL, {
-			timeout: this.requestTimeoutMs
-		});
+		const response = await this.http.get(requestURL);
 		const data = response.data;
 
 		if (data?.status && data.status !== "success") {
@@ -506,9 +503,7 @@ class IPDox {
 
 	private async fetchIPSonarDotCom(ip: string): Promise<IPDOXResponse> {
 		const requestURL = GeoAPIs.IP_SONAR_DOT_COM + encodeURIComponent(ip);
-		const response = await axios.get(requestURL, {
-			timeout: this.requestTimeoutMs
-		});
+		const response = await this.http.get(requestURL);
 		const data = response.data;
 
 		const responseIP = this.parseString(data?.ip);

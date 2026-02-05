@@ -4,11 +4,14 @@ import { IPDox } from "./index.js";
 
 vi.mock("axios");
 
-const mockedAxios = axios as unknown as { get: ReturnType<typeof vi.fn> };
+const mockedAxios = axios as unknown as { create: ReturnType<typeof vi.fn> };
+let mockedGet: ReturnType<typeof vi.fn>;
 
 describe("IPDox", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockedGet = vi.fn();
+		mockedAxios.create = vi.fn(() => ({ get: mockedGet }));
 	});
 
 	it("returns undefined for empty ip", async () => {
@@ -25,7 +28,7 @@ describe("IPDox", () => {
 
 	it("formats response from ipwho.is provider", async () => {
 		const ipdox = new IPDox({ maxRetries: 1 });
-		mockedAxios.get = vi.fn().mockResolvedValue({
+		mockedGet.mockResolvedValue({
 			data: {
 				success: true,
 				ip: "8.8.8.8",
@@ -59,7 +62,7 @@ describe("IPDox", () => {
 
 	it("formats response from geoip.vuiz.net provider", async () => {
 		const ipdox = new IPDox({ maxRetries: 1 });
-		mockedAxios.get = vi.fn().mockResolvedValue({
+		mockedGet.mockResolvedValue({
 			data: {
 				ip: "8.8.8.8",
 				continent: "North America",
@@ -92,7 +95,7 @@ describe("IPDox", () => {
 
 	it("formats response from apip.cc provider", async () => {
 		const ipdox = new IPDox({ maxRetries: 1 });
-		mockedAxios.get = vi.fn().mockResolvedValue({
+		mockedGet.mockResolvedValue({
 			data: {
 				status: "success",
 				ip: "1.1.1.1",
@@ -126,7 +129,7 @@ describe("IPDox", () => {
 
 	it("formats response from ip-sonar.com provider", async () => {
 		const ipdox = new IPDox({ maxRetries: 1 });
-		mockedAxios.get = vi.fn().mockResolvedValue({
+		mockedGet.mockResolvedValue({
 			data: {
 				ip: "216.8.112.107",
 				continent_code: "NA",
@@ -157,7 +160,7 @@ describe("IPDox", () => {
 
 	it("caches responses by ip", async () => {
 		const ipdox = new IPDox({ maxRetries: 1 });
-		mockedAxios.get = vi.fn().mockResolvedValue({
+		mockedGet.mockResolvedValue({
 			data: {
 				success: true,
 				ip: "1.1.1.1",
