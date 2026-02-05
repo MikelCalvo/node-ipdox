@@ -10,6 +10,17 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
 const DEFAULT_USER_AGENT = "node-ipdox";
 const RETRY_BACKOFF_BASE_MS = 150;
 const RETRY_BACKOFF_MAX_MS = 2000;
+const PRIMARY_PROVIDERS: GeoAPIs[] = [
+	GeoAPIs.IP_HYPHEN_API_DOT_COM,
+	GeoAPIs.FREE_IP_API_DOT_COM,
+	GeoAPIs.IPWHO_DOT_IS,
+	GeoAPIs.IPAPI_DOT_CO
+];
+const FALLBACK_PROVIDERS: GeoAPIs[] = [
+	GeoAPIs.GEOIP_VUIZ_DOT_NET,
+	GeoAPIs.APIP_DOT_CC,
+	GeoAPIs.IP_SONAR_DOT_COM
+];
 
 class IPDox {
 	private cache: LRUCache<string, IPDOXResponse>;
@@ -105,25 +116,49 @@ class IPDox {
 	private async fetchWithRetries(
 		ip: string
 	): Promise<IPDOXResponse | undefined> {
-		const providers = Object.values(GeoAPIs) as GeoAPIs[];
-		if (providers.length === 0 || this.maxRetries <= 0) {
+		if (this.maxRetries <= 0) {
 			return undefined;
 		}
 
+		const primaryProviders = PRIMARY_PROVIDERS.filter(provider =>
+			Object.values(GeoAPIs).includes(provider)
+		);
+		const fallbackProviders = FALLBACK_PROVIDERS.filter(provider =>
+			Object.values(GeoAPIs).includes(provider)
+		);
+		const providers =
+			primaryProviders.length > 0 || fallbackProviders.length > 0
+				? { primary: primaryProviders, fallback: fallbackProviders }
+				: {
+						primary: Object.values(GeoAPIs) as GeoAPIs[],
+						fallback: []
+					};
+
 		let attempts = 0;
-		let order = this.shuffleProviders(providers);
+		let order = [
+			...this.shuffleProviders(providers.primary),
+			...this.shuffleProviders(providers.fallback)
+		];
 		let index = 0;
-		let lastProvider: GeoAPIs | undefined;
+
+		if (order.length === 0) {
+			return undefined;
+		}
 
 		while (attempts < this.maxRetries) {
 			if (index >= order.length) {
-				order = this.shuffleProviders(providers, lastProvider);
+				order = [
+					...this.shuffleProviders(providers.primary),
+					...this.shuffleProviders(providers.fallback)
+				];
 				index = 0;
+				if (order.length === 0) {
+					return undefined;
+				}
 			}
 
 			const provider = order[index];
 			index++;
-			lastProvider = provider;
 
 			try {
 				return await this.fetchFromProvider(provider, ip);

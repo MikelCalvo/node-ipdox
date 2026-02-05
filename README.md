@@ -12,6 +12,9 @@ Current keyless providers used:
 - ipwho.is
 - freeipapi.com
 - ipapi.co
+
+Fallback providers (best-effort, used after primary providers fail):
+
 - geoip.vuiz.net
 - apip.cc
 - ip-sonar.com
