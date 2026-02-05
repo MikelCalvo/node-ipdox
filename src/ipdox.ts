@@ -8,6 +8,8 @@ import { LRUCache } from "lru-cache";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
 const DEFAULT_USER_AGENT = "node-ipdox";
+const RETRY_BACKOFF_BASE_MS = 150;
+const RETRY_BACKOFF_MAX_MS = 2000;
 
 class IPDox {
 	private cache: LRUCache<string, IPDOXResponse>;
@@ -127,6 +129,9 @@ class IPDox {
 				return await this.fetchFromProvider(provider, ip);
 			} catch {
 				attempts++;
+				if (attempts < this.maxRetries) {
+					await this.waitWithJitter(attempts);
+				}
 			}
 		}
 
@@ -155,6 +160,15 @@ class IPDox {
 			default:
 				throw new Error("Unsupported provider");
 		}
+	}
+
+	private async waitWithJitter(attempt: number): Promise<void> {
+		const baseDelay = Math.min(
+			RETRY_BACKOFF_MAX_MS,
+			RETRY_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1)
+		);
+		const jitter = Math.random() * baseDelay;
+		await new Promise(resolve => setTimeout(resolve, jitter));
 	}
 
 	private parseNumber(value: unknown): number | undefined {
