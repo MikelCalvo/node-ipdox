@@ -1,6 +1,6 @@
 {
 	"name": "node-ipdox",
-	"version": "1.0.6",
+	"version": "1.1.0",
 	"description": "node-ipdox is a Node.js library for GeoIP lookup, leveraging various free GeoIP APIs. It provides a unified response format and incorporates local caching to minimize duplicate requests.",
 	"author": "Mikel Calvo <contact@mikecalvo.net> (www.mikelcalvo.net)",
 	"keywords": [
@@ -15,7 +15,9 @@
 	"license": "ISC",
 	"readmeFilename": "README.md",
 	"homepage": "https://github.com/MikelCalvo/ipdox#readme",
-	"bugs": { "url": "https://github.com/MikelCalvo/ipdox/issues" },
+	"bugs": {
+		"url": "https://github.com/MikelCalvo/ipdox/issues"
+	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"exports": {
@@ -25,7 +27,9 @@
 			"import": "./dist/index.js"
 		}
 	},
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"scripts": {
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -41,7 +45,10 @@
 		"access": "public",
 		"provenance": true
 	},
-	"dependencies": { "axios": "1.13.4", "lru-cache": "^11.2.5" },
+	"dependencies": {
+		"axios": "1.13.4",
+		"lru-cache": "^11.2.5"
+	},
 	"devDependencies": {
 		"@types/node": "25.2.1",
 		"prettier": "3.8.1",
