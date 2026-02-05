@@ -233,6 +233,21 @@ class IPDox {
 		return undefined;
 	}
 
+	private pickString(...values: unknown[]): string | undefined {
+		for (const value of values) {
+			const parsed = this.parseString(value);
+			if (parsed) {
+				return parsed;
+			}
+		}
+
+		return undefined;
+	}
+
+	private pickStringOrEmpty(...values: unknown[]): string {
+		return this.pickString(...values) ?? "";
+	}
+
 	private normalizeContinentCode(continentName: unknown): string | undefined {
 		const name = this.parseString(continentName)?.toLowerCase();
 		if (!name) {
@@ -458,24 +473,34 @@ class IPDox {
 		const response = await this.http.get(requestURL);
 		const data = response.data;
 
-		const responseIP = this.parseString(data?.ip);
-		const country = this.parseString(data?.countryCode);
-		const city = this.parseString(data?.city);
-		const continent = this.normalizeContinentCode(data?.continent);
-		const latitude = this.parseNumber(data?.lat);
-		const longitude = this.parseNumber(data?.lon);
+		const responseIP = this.parseString(data?.ip) ?? ip;
+		const country = this.pickString(data?.country_code, data?.countryCode);
+		const city = this.pickStringOrEmpty(
+			data?.city,
+			data?.region,
+			data?.country,
+			data?.country_name
+		);
+		const continent =
+			this.pickString(data?.continent_code, data?.continentCode) ??
+			this.normalizeContinentCode(data?.continent);
+		const latitude = this.parseNumber(data?.latitude ?? data?.lat);
+		const longitude = this.parseNumber(data?.longitude ?? data?.lon);
 
 		if (
 			responseIP &&
 			country &&
-			city &&
 			continent &&
 			latitude !== undefined &&
 			longitude !== undefined
 		) {
-			const zip = this.parseString(data?.zip);
-			const isp = this.parseString(data?.isp);
-			const timeZone = this.parseString(data?.timezone);
+			const zip = this.pickString(data?.postal_code, data?.zip);
+			const isp = this.pickString(
+				data?.isp,
+				data?.organization,
+				data?.asn_organization
+			);
+			const timeZone = this.pickString(data?.timezone);
 
 			const formattedResponse: IPDOXResponse = {
 				ip: responseIP,
@@ -507,17 +532,22 @@ class IPDox {
 			return Promise.reject();
 		}
 
-		const responseIP = this.parseString(data?.ip);
+		const responseIP = this.parseString(data?.ip) ?? ip;
 		const country = this.parseString(data?.CountryCode);
-		const city = this.parseString(data?.City);
-		const continent = this.parseString(data?.ContinentCode);
+		const city = this.pickStringOrEmpty(
+			data?.City,
+			data?.RegionName,
+			data?.CountryName
+		);
+		const continent =
+			this.parseString(data?.ContinentCode) ??
+			this.normalizeContinentCode(data?.ContinentName);
 		const latitude = this.parseNumber(data?.Latitude);
 		const longitude = this.parseNumber(data?.Longitude);
 
 		if (
 			responseIP &&
 			country &&
-			city &&
 			continent &&
 			latitude !== undefined &&
 			longitude !== undefined
@@ -555,9 +585,13 @@ class IPDox {
 		const response = await this.http.get(requestURL);
 		const data = response.data;
 
-		const responseIP = this.parseString(data?.ip);
+		const responseIP = this.parseString(data?.ip) ?? ip;
 		const country = this.parseString(data?.country_code);
-		const city = this.parseString(data?.city_name);
+		const city = this.pickStringOrEmpty(
+			data?.city_name,
+			data?.region_name,
+			data?.country_name
+		);
 		const continent = this.parseString(data?.continent_code);
 		const latitude = this.parseNumber(data?.latitude);
 		const longitude = this.parseNumber(data?.longitude);
@@ -565,7 +599,6 @@ class IPDox {
 		if (
 			responseIP &&
 			country &&
-			city &&
 			continent &&
 			latitude !== undefined &&
 			longitude !== undefined

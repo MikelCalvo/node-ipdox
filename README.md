@@ -19,6 +19,8 @@ Fallback providers (best-effort, used after primary providers fail):
 - apip.cc
 - ip-sonar.com
 
+Fallback providers can return partial data; `city` may be an empty string when unknown.
+
 ## Installation
 
 ```bash
