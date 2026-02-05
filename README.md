@@ -13,6 +13,8 @@ Current keyless providers used:
 - freeipapi.com
 - ipapi.co
 
+Note: ip-api.com free tier uses HTTP only. Provide `ipApiKey` to enable HTTPS (pro).
+
 Fallback providers (best-effort, used after primary providers fail):
 
 - geoip.vuiz.net
@@ -36,7 +38,8 @@ const ipdox = new IPDox({
 	cacheMaxItems: 5000,
 	cacheMaxAge: 43200000,
 	maxRetries: 10,
-	requestTimeoutMs: 5000
+	requestTimeoutMs: 5000,
+	ipApiKey: "YOUR_IP_API_KEY"
 });
 
 ipdox
@@ -47,7 +50,7 @@ ipdox
 
 ## API
 
-### `new IPDox({ cacheMaxItems, cacheMaxAge, maxRetries, requestTimeoutMs })`
+### `new IPDox({ cacheMaxItems, cacheMaxAge, maxRetries, requestTimeoutMs, ipApiKey })`
 
 Creates a new instance of IPDox.
 
@@ -55,6 +58,7 @@ Creates a new instance of IPDox.
 - `cacheMaxAge` - The cache timeout in milliseconds (default: 43200000 (12 hours))
 - `maxRetries` - Maximum number of retries if an API request fails (default: 10)
 - `requestTimeoutMs` - Request timeout in milliseconds (default: 5000)
+- `ipApiKey` - Optional ip-api.com pro API key to enable HTTPS
 
 ### `ipdox.doxIP({ ip })`
 

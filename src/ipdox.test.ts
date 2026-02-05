@@ -60,6 +60,33 @@ describe("IPDox", () => {
 		});
 	});
 
+	it("uses ip-api.com pro endpoint when key is provided", async () => {
+		const ipdox = new IPDox({ maxRetries: 1, ipApiKey: "testkey" });
+		mockedGet.mockResolvedValue({
+			data: {
+				status: "success",
+				query: "1.1.1.1",
+				countryCode: "AU",
+				city: "Sydney",
+				continentCode: "OC",
+				lat: -33.86,
+				lon: 151.21,
+				zip: "2000",
+				isp: "Cloudflare",
+				proxy: false,
+				hosting: false,
+				timezone: "Australia/Sydney"
+			}
+		});
+
+		// @ts-expect-error Accessing class method for test
+		const r = await ipdox.fetchIPHyphenAPIDotCom("1.1.1.1");
+		expect(r.source).toBe("ip-api.com");
+		expect(mockedGet).toHaveBeenCalledWith(
+			"https://pro.ip-api.com/json/1.1.1.1?fields=24899583&key=testkey"
+		);
+	});
+
 	it("formats response from geoip.vuiz.net provider", async () => {
 		const ipdox = new IPDox({ maxRetries: 1 });
 		mockedGet.mockResolvedValue({

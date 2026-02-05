@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { lookup } from "node:dns/promises";
 import { IPDox } from "../index.js";
 
 const RUN = process.env.RUN_INTEGRATION === "1";
@@ -6,6 +7,23 @@ const TEST_IP = process.env.TEST_IP || "8.8.8.8";
 
 // Run only when explicitly enabled
 (RUN ? describe : describe.skip)("Integration: real providers", () => {
+	const canResolve = async (hostname: string): Promise<boolean> => {
+		try {
+			await lookup(hostname);
+			return true;
+		} catch (error) {
+			const code =
+				error && typeof error === "object"
+					? (error as { code?: string }).code
+					: undefined;
+			if (code === "ENOTFOUND" || code === "EAI_AGAIN" || code === "ENODATA") {
+				return false;
+			}
+
+			throw error;
+		}
+	};
+
 	it("ipwho.is", async () => {
 		const ipdox = new IPDox({ maxRetries: 1 });
 		// @ts-expect-error call provider directly to avoid randomness
@@ -34,6 +52,10 @@ const TEST_IP = process.env.TEST_IP || "8.8.8.8";
 	}, 20_000);
 
 	it("ipapi.co", async () => {
+		const resolved = await canResolve("ipapi.co");
+		if (!resolved) {
+			return;
+		}
 		const ipdox = new IPDox({ maxRetries: 1 });
 		// @ts-expect-error call provider directly to avoid randomness
 		const r = await ipdox.fetchIPAPIDotCo(TEST_IP);

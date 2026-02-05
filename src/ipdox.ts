@@ -28,6 +28,8 @@ class IPDox {
 	private requestTimeoutMs: number;
 	private inFlight: Map<string, Promise<IPDOXResponse | undefined>>;
 	private http: AxiosInstance;
+	private ipApiKey?: string;
+	private unavailableProviders: Set<GeoAPIs>;
 
 	/**
 	 * @description Creates an instance of IPDox.
@@ -41,7 +43,8 @@ class IPDox {
 			cacheMaxItems = 1000,
 			cacheMaxAge = 43200000,
 			maxRetries = 10,
-			requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS
+			requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+			ipApiKey
 		}: IPDOXConstructor = {
 			cacheMaxItems: 1000,
 			cacheMaxAge: 43200000,
@@ -57,6 +60,8 @@ class IPDox {
 		this.maxRetries = maxRetries;
 		this.requestTimeoutMs = requestTimeoutMs;
 		this.inFlight = new Map();
+		this.ipApiKey = typeof ipApiKey === "string" ? ipApiKey.trim() : undefined;
+		this.unavailableProviders = new Set();
 		this.http = axios.create({
 			timeout: this.requestTimeoutMs,
 			headers: {
@@ -120,17 +125,19 @@ class IPDox {
 			return undefined;
 		}
 
-		const primaryProviders = PRIMARY_PROVIDERS.filter(provider =>
-			Object.values(GeoAPIs).includes(provider)
+		const primaryProviders = PRIMARY_PROVIDERS.filter(
+			provider => !this.unavailableProviders.has(provider)
 		);
-		const fallbackProviders = FALLBACK_PROVIDERS.filter(provider =>
-			Object.values(GeoAPIs).includes(provider)
+		const fallbackProviders = FALLBACK_PROVIDERS.filter(
+			provider => !this.unavailableProviders.has(provider)
 		);
 		const providers =
 			primaryProviders.length > 0 || fallbackProviders.length > 0
 				? { primary: primaryProviders, fallback: fallbackProviders }
 				: {
-						primary: Object.values(GeoAPIs) as GeoAPIs[],
+						primary: (Object.values(GeoAPIs) as GeoAPIs[]).filter(
+							provider => !this.unavailableProviders.has(provider)
+						),
 						fallback: []
 					};
 
@@ -159,10 +166,15 @@ class IPDox {
 
 			const provider = order[index];
 			index++;
+			if (this.unavailableProviders.has(provider)) {
+				attempts++;
+				continue;
+			}
 
 			try {
 				return await this.fetchFromProvider(provider, ip);
-			} catch {
+			} catch (error) {
+				this.noteProviderFailure(provider, error);
 				attempts++;
 				if (attempts < this.maxRetries) {
 					await this.waitWithJitter(attempts);
@@ -204,6 +216,22 @@ class IPDox {
 		);
 		const jitter = Math.random() * baseDelay;
 		await new Promise(resolve => setTimeout(resolve, jitter));
+	}
+
+	private noteProviderFailure(provider: GeoAPIs, error: unknown): void {
+		if (provider === GeoAPIs.IPAPI_DOT_CO && this.isDnsError(error)) {
+			this.unavailableProviders.add(provider);
+		}
+	}
+
+	private isDnsError(error: unknown): boolean {
+		if (!error || typeof error !== "object") {
+			return false;
+		}
+
+		const maybeError = error as { code?: string; cause?: { code?: string } };
+		const code = maybeError.code ?? maybeError.cause?.code;
+		return code === "ENOTFOUND" || code === "EAI_AGAIN" || code === "ENODATA";
 	}
 
 	private parseNumber(value: unknown): number | undefined {
@@ -279,7 +307,14 @@ class IPDox {
 	}
 
 	private async fetchIPHyphenAPIDotCom(ip: string): Promise<IPDOXResponse> {
-		const requestURL = GeoAPIs.IP_HYPHEN_API_DOT_COM + ip + "?fields=24899583";
+		const baseURL = this.ipApiKey
+			? "https://pro.ip-api.com/json/"
+			: GeoAPIs.IP_HYPHEN_API_DOT_COM;
+		const requestURL =
+			baseURL +
+			ip +
+			"?fields=24899583" +
+			(this.ipApiKey ? `&key=${encodeURIComponent(this.ipApiKey)}` : "");
 		const response = await this.http.get(requestURL);
 
 		if (response.data.status === "success") {
