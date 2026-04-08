@@ -104,7 +104,10 @@ class IPDox {
 		return task;
 	}
 
-	private shuffleProviders(providers: GeoAPIs[], avoidFirst?: GeoAPIs): GeoAPIs[] {
+	private shuffleProviders(
+		providers: GeoAPIs[],
+		avoidFirst?: GeoAPIs
+	): GeoAPIs[] {
 		const shuffled = [...providers];
 		for (let i = shuffled.length - 1; i > 0; i--) {
 			const j = Math.floor(Math.random() * (i + 1));
@@ -417,8 +420,7 @@ class IPDox {
 
 		if (response.data.success) {
 			const zip =
-				typeof response.data.postal === "string" &&
-				response.data.postal !== ""
+				typeof response.data.postal === "string" && response.data.postal !== ""
 					? response.data.postal
 					: undefined;
 			const isp =
@@ -469,8 +471,7 @@ class IPDox {
 
 		if (response.data.ip) {
 			const zip =
-				typeof response.data.postal === "string" &&
-				response.data.postal !== ""
+				typeof response.data.postal === "string" && response.data.postal !== ""
 					? response.data.postal
 					: undefined;
 			const isp =

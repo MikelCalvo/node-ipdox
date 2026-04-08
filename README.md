@@ -29,7 +29,61 @@ Fallback providers can return partial data; `city` may be an empty string when u
 npm install node-ipdox --save
 ```
 
-## Usage
+## CLI Usage
+
+You can use ipdox directly from the command line:
+
+```bash
+# Using npx (no installation required)
+npx node-ipdox 8.8.8.8
+
+# Or install globally
+npm install -g node-ipdox
+ipdox 8.8.8.8
+```
+
+### Examples
+
+```bash
+# Basic lookup - returns formatted JSON
+ipdox 8.8.8.8
+
+# IPv6 support
+ipdox 2001:4860:4860::8888
+
+# Pipe to jq for filtering
+ipdox 1.1.1.1 | jq '.country'
+
+# Save to file
+ipdox 8.8.8.8 > result.json
+
+# Use in scripts
+COUNTRY=$(ipdox 8.8.8.8 | jq -r '.country')
+echo "IP is from: $COUNTRY"
+```
+
+### CLI Options
+
+```
+ipdox <ip>              Lookup geolocation data for an IP address
+ipdox --help, -h        Show help message
+ipdox --version, -v     Show version number
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `IPDOX_API_KEY` | ip-api.com Pro API key for HTTPS support | - |
+| `IPDOX_TIMEOUT` | Request timeout in milliseconds | 5000 |
+| `IPDOX_RETRIES` | Maximum number of retries | 10 |
+
+### Exit Codes
+
+- `0` - Success, JSON output written to stdout
+- `1` - Error (invalid IP, network failure, etc.), message written to stderr
+
+## SDK Usage
 
 ```javascript
 import { IPDox } from "node-ipdox";
