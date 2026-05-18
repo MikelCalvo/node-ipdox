@@ -50,13 +50,13 @@
 		"provenance": true
 	},
 	"dependencies": {
-		"axios": "1.15.1",
-		"lru-cache": "^11.3.5"
+		"axios": "1.16.1",
+		"lru-cache": "^11.3.6"
 	},
 	"devDependencies": {
-		"@types/node": "25.6.0",
+		"@types/node": "25.8.0",
 		"prettier": "3.8.3",
 		"typescript": "^6.0.3",
-		"vitest": "4.1.5"
+		"vitest": "4.1.6"
 	}
 }
