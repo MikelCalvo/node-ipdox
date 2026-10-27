@@ -5,7 +5,7 @@
  * @property {string} ip The IP address
  * @property {string} country The country (ISO 3166)
  * @property {string} city The city
- * @property {string} continent The continent (ISO 3166)
+ * @property {string} continent The continent code (AF, AN, AS, EU, NA, OC or SA)
  * @property {number} latitude The latitude
  * @property {number} longitude The longitude
  * @property {string} zip The ZIP code (might be undefined)

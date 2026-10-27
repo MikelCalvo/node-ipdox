@@ -6,7 +6,7 @@
  * @property {number} cacheMaxAge The cache timeout in milliseconds (default: 43200000 (12 hours))
  * @property {number} maxRetries The maximum number of retries (default: 10)
  * @property {number} requestTimeoutMs Request timeout in milliseconds (default: 5000)
- * @property {string} ipApiKey Optional ip-api.com pro API key for HTTPS
+ * @property {string} ipApiKey Optional explicit opt-in to the paid ip-api.com Pro provider
  */
 export interface IPDOXConstructor {
 	cacheMaxItems?: number;

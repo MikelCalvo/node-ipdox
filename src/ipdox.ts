@@ -4,23 +4,27 @@ import { IPDOXRequest } from "./types/IPDOXRequest.js";
 import { IPDOXResponse } from "./types/IPDOXResponse.js";
 import { IPDOXConstructor } from "./types/IPDOXConstructor.js";
 import { GeoAPIs } from "./utils/apis.js";
+import { continentForCountry } from "./utils/continents.js";
 import { LRUCache } from "lru-cache";
+import { sharedProviderBudget } from "./utils/provider-budget.js";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
 const DEFAULT_USER_AGENT = "node-ipdox";
 const RETRY_BACKOFF_BASE_MS = 150;
 const RETRY_BACKOFF_MAX_MS = 2000;
-const PRIMARY_PROVIDERS: GeoAPIs[] = [
-	GeoAPIs.IP_HYPHEN_API_DOT_COM,
+const FREE_PROVIDERS: GeoAPIs[] = [
 	GeoAPIs.FREE_IP_API_DOT_COM,
-	GeoAPIs.IPWHO_DOT_IS,
-	GeoAPIs.IPAPI_DOT_CO
-];
-const FALLBACK_PROVIDERS: GeoAPIs[] = [
+	GeoAPIs.IP_QUERY_DOT_IO,
+	GeoAPIs.GEO_JS_DOT_IO,
+	GeoAPIs.HACK_MY_IP_DOT_COM,
 	GeoAPIs.GEOIP_VUIZ_DOT_NET,
 	GeoAPIs.APIP_DOT_CC,
-	GeoAPIs.IP_SONAR_DOT_COM
+	GeoAPIs.COUNTRY_DOT_IS,
+	GeoAPIs.IP_INFO_DOT_COM,
+	GeoAPIs.IP_ADDRESS_DETAILS_DOT_COM,
+	GeoAPIs.NETWORK_TOOLS_DOT_DEV
 ];
+const CONTINENTS = new Set(["AF", "AN", "AS", "EU", "NA", "OC", "SA"]);
 
 class IPDox {
 	private cache: LRUCache<string, IPDOXResponse>;
@@ -29,7 +33,9 @@ class IPDox {
 	private inFlight: Map<string, Promise<IPDOXResponse | undefined>>;
 	private http: AxiosInstance;
 	private ipApiKey?: string;
-	private unavailableProviders: Set<GeoAPIs>;
+	private providerBudget = sharedProviderBudget;
+	private providerOrder?: GeoAPIs[];
+	private providerCursor = 0;
 
 	/**
 	 * @description Creates an instance of IPDox.
@@ -61,13 +67,12 @@ class IPDox {
 		this.requestTimeoutMs = requestTimeoutMs;
 		this.inFlight = new Map();
 		this.ipApiKey = typeof ipApiKey === "string" ? ipApiKey.trim() : undefined;
-		this.unavailableProviders = new Set();
 		this.http = axios.create({
 			timeout: this.requestTimeoutMs,
 			headers: {
 				"User-Agent": DEFAULT_USER_AGENT
 			},
-			validateStatus: status => status >= 200 && status < 500
+			validateStatus: status => status >= 200 && status < 300
 		});
 	}
 
@@ -128,58 +133,34 @@ class IPDox {
 			return undefined;
 		}
 
-		const primaryProviders = PRIMARY_PROVIDERS.filter(
-			provider => !this.unavailableProviders.has(provider)
+		// Shuffle once, then rotate across every eligible provider, not just primaries.
+		this.providerOrder ??= this.shuffleProviders(
+			this.ipApiKey
+				? [GeoAPIs.IP_HYPHEN_API_DOT_COM, ...FREE_PROVIDERS]
+				: FREE_PROVIDERS
 		);
-		const fallbackProviders = FALLBACK_PROVIDERS.filter(
-			provider => !this.unavailableProviders.has(provider)
-		);
-		const providers =
-			primaryProviders.length > 0 || fallbackProviders.length > 0
-				? { primary: primaryProviders, fallback: fallbackProviders }
-				: {
-						primary: (Object.values(GeoAPIs) as GeoAPIs[]).filter(
-							provider => !this.unavailableProviders.has(provider)
-						),
-						fallback: []
-					};
-
+		const order = this.providerOrder;
+		const attempted = new Set<GeoAPIs>();
 		let attempts = 0;
-		let order = [
-			...this.shuffleProviders(providers.primary),
-			...this.shuffleProviders(providers.fallback)
-		];
-		let index = 0;
-
-		if (order.length === 0) {
-			return undefined;
-		}
-
 		while (attempts < this.maxRetries) {
-			if (index >= order.length) {
-				order = [
-					...this.shuffleProviders(providers.primary),
-					...this.shuffleProviders(providers.fallback)
-				];
-				index = 0;
-				if (order.length === 0) {
-					return undefined;
+			let provider: GeoAPIs | undefined;
+			for (let checked = 0; checked < order.length; checked++) {
+				const candidate = order[this.providerCursor];
+				this.providerCursor = (this.providerCursor + 1) % order.length;
+				if (attempted.has(candidate)) continue;
+				attempted.add(candidate);
+				if (this.providerBudget.reserve(candidate)) {
+					provider = candidate;
+					break;
 				}
 			}
-
-			const provider = order[index];
-			index++;
-			if (this.unavailableProviders.has(provider)) {
-				attempts++;
-				continue;
-			}
-
+			if (!provider) return undefined;
 			try {
 				return await this.fetchFromProvider(provider, ip);
 			} catch (error) {
 				this.noteProviderFailure(provider, error);
 				attempts++;
-				if (attempts < this.maxRetries) {
+				if (attempts < this.maxRetries && attempted.size < order.length) {
 					await this.waitWithJitter(attempts);
 				}
 			}
@@ -197,16 +178,24 @@ class IPDox {
 				return this.fetchIPHyphenAPIDotCom(ip);
 			case GeoAPIs.FREE_IP_API_DOT_COM:
 				return this.fetchFreeIPAPIDotCom(ip);
-			case GeoAPIs.IPWHO_DOT_IS:
-				return this.fetchIPWhoDotIs(ip);
-			case GeoAPIs.IPAPI_DOT_CO:
-				return this.fetchIPAPIDotCo(ip);
+			case GeoAPIs.GEO_JS_DOT_IO:
+				return this.fetchGeoJSDotIO(ip);
+			case GeoAPIs.IP_QUERY_DOT_IO:
+				return this.fetchIPQueryDotIO(ip);
+			case GeoAPIs.HACK_MY_IP_DOT_COM:
+				return this.fetchHackMyIPDotCom(ip);
 			case GeoAPIs.GEOIP_VUIZ_DOT_NET:
 				return this.fetchGeoIPVuizDotNet(ip);
 			case GeoAPIs.APIP_DOT_CC:
 				return this.fetchAPIPDotCC(ip);
-			case GeoAPIs.IP_SONAR_DOT_COM:
-				return this.fetchIPSonarDotCom(ip);
+			case GeoAPIs.COUNTRY_DOT_IS:
+				return this.fetchCountryDotIs(ip);
+			case GeoAPIs.IP_INFO_DOT_COM:
+				return this.fetchIPInfoDotCom(ip);
+			case GeoAPIs.IP_ADDRESS_DETAILS_DOT_COM:
+				return this.fetchIPAddressDetailsDotCom(ip);
+			case GeoAPIs.NETWORK_TOOLS_DOT_DEV:
+				return this.fetchNetworkToolsDotDev(ip);
 			default:
 				throw new Error("Unsupported provider");
 		}
@@ -222,19 +211,30 @@ class IPDox {
 	}
 
 	private noteProviderFailure(provider: GeoAPIs, error: unknown): void {
-		if (provider === GeoAPIs.IPAPI_DOT_CO && this.isDnsError(error)) {
-			this.unavailableProviders.add(provider);
+		const failure = error as
+			| {
+					code?: string;
+					response?: { status?: number; headers?: Record<string, unknown> };
+			  }
+			| undefined;
+		let until = Date.now() + 30_000;
+		if (failure?.response?.status === 429) {
+			const retryAfter = failure.response.headers?.["retry-after"];
+			const value =
+				typeof retryAfter === "string" || typeof retryAfter === "number"
+					? String(retryAfter).trim()
+					: "";
+			const seconds =
+				value !== "" && /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : NaN;
+			const deadline = Number.isFinite(seconds)
+				? Date.now() + seconds * 1000
+				: Date.parse(value);
+			until =
+				Number.isFinite(deadline) && deadline > Date.now()
+					? deadline
+					: this.providerBudget.quotaRetryAt(provider);
 		}
-	}
-
-	private isDnsError(error: unknown): boolean {
-		if (!error || typeof error !== "object") {
-			return false;
-		}
-
-		const maybeError = error as { code?: string; cause?: { code?: string } };
-		const code = maybeError.code ?? maybeError.cause?.code;
-		return code === "ENOTFOUND" || code === "EAI_AGAIN" || code === "ENODATA";
+		this.providerBudget.defer(provider, until);
 	}
 
 	private parseNumber(value: unknown): number | undefined {
@@ -245,7 +245,7 @@ class IPDox {
 		if (typeof value === "string") {
 			const trimmed = value.trim();
 			if (trimmed !== "") {
-				const parsed = Number.parseFloat(trimmed);
+				const parsed = Number(trimmed);
 				if (Number.isFinite(parsed)) {
 					return parsed;
 				}
@@ -305,14 +305,51 @@ class IPDox {
 		}
 	}
 
-	private cacheResponse(ip: string, response: IPDOXResponse): void {
-		this.cache.set(ip, response);
+	private cacheResponse(
+		ip: string,
+		response: IPDOXResponse,
+		cacheTtlMs?: number
+	): void {
+		const canonicalIP = (value: string): string | undefined => {
+			const family = typeof value === "string" ? isIP(value) : 0;
+			return family === 6
+				? new URL(`http://[${value}]/`).hostname
+				: family === 4
+					? value
+					: undefined;
+		};
+		if (
+			!canonicalIP(response.ip) ||
+			canonicalIP(response.ip) !== canonicalIP(ip) ||
+			!continentForCountry(response.country) ||
+			!CONTINENTS.has(response.continent) ||
+			typeof response.city !== "string" ||
+			!Number.isFinite(response.latitude) ||
+			Math.abs(response.latitude) > 90 ||
+			!Number.isFinite(response.longitude) ||
+			Math.abs(response.longitude) > 180
+		)
+			throw new Error("Invalid geolocation response");
+		// IP Info explicitly sends no-store. Other new providers cap cache lifetime.
+		if (cacheTtlMs === 0) return;
+		this.cache.set(
+			ip,
+			response,
+			cacheTtlMs === undefined
+				? undefined
+				: {
+						ttl:
+							this.cache.ttl > 0
+								? Math.min(this.cache.ttl, cacheTtlMs)
+								: cacheTtlMs
+					}
+		);
 	}
 
 	private async fetchIPHyphenAPIDotCom(ip: string): Promise<IPDOXResponse> {
-		const baseURL = this.ipApiKey
-			? "https://pro.ip-api.com/json/"
-			: GeoAPIs.IP_HYPHEN_API_DOT_COM;
+		if (!this.ipApiKey)
+			throw new Error("ip-api.com Pro requires an explicit key");
+		const baseURL = GeoAPIs.IP_HYPHEN_API_DOT_COM;
 		const requestURL =
 			baseURL +
 			ip +
@@ -365,142 +402,223 @@ class IPDox {
 	}
 
 	private async fetchFreeIPAPIDotCom(ip: string): Promise<IPDOXResponse> {
-		const requestURL = GeoAPIs.FREE_IP_API_DOT_COM + ip;
-		const response = await this.http.get(requestURL);
-
-		if (response.data.ipVersion === 4 || response.data.ipVersion === 6) {
-			const zip =
-				typeof response.data.zipCode === "string" &&
-				response.data.zipCode !== ""
-					? response.data.zipCode
-					: undefined;
-			const isp =
-				typeof response.data.isp === "string" && response.data.isp !== ""
-					? response.data.isp
-					: undefined;
-			const proxy =
-				typeof response.data.proxy === "boolean"
-					? response.data.proxy
-					: undefined;
-			const isHosting =
-				typeof response.data.hosting === "boolean"
-					? response.data.hosting
-					: undefined;
-			const timeZone =
-				Array.isArray(response.data.timeZones) &&
-				typeof response.data.timeZones[0] === "string"
-					? response.data.timeZones[0]
-					: undefined;
-			const formattedResponse: IPDOXResponse = {
-				ip: response.data.ipAddress,
-				country: response.data.countryCode,
-				city: response.data.cityName,
-				continent: response.data.continentCode,
-				latitude: response.data.latitude,
-				longitude: response.data.longitude,
-				zip,
-				isp,
-				proxy,
-				isHosting,
-				timeZone,
-				source: "freeipapi.com"
-			};
-
-			this.cacheResponse(ip, formattedResponse);
-
-			return Promise.resolve(formattedResponse);
-		} else {
-			return Promise.reject();
+		const { data } = await this.http.get(
+			GeoAPIs.FREE_IP_API_DOT_COM + encodeURIComponent(ip)
+		);
+		if (data?.ipVersion !== 4 && data?.ipVersion !== 6) {
+			throw new Error("FreeIPAPI lookup failed");
 		}
+		const country = this.pickStringOrEmpty(data.countryCode);
+		const response: IPDOXResponse = {
+			ip: this.pickStringOrEmpty(data.ipAddress),
+			country,
+			city: this.pickStringOrEmpty(data.cityName),
+			// FreeIPAPI uses AM for the Americas; the public contract uses NA/SA.
+			continent: CONTINENTS.has(data.continentCode)
+				? data.continentCode
+				: (continentForCountry(country) ?? ""),
+			latitude: this.parseNumber(data.latitude) ?? NaN,
+			longitude: this.parseNumber(data.longitude) ?? NaN,
+			zip: this.parseString(data.zipCode),
+			isp: this.pickString(data.isp, data.asnOrganization),
+			proxy: typeof data.isProxy === "boolean" ? data.isProxy : undefined,
+			isHosting: typeof data.hosting === "boolean" ? data.hosting : undefined,
+			timeZone: Array.isArray(data.timeZones)
+				? this.parseString(data.timeZones[0])
+				: undefined,
+			source: "freeipapi.com"
+		};
+		this.cacheResponse(ip, response);
+		return response;
 	}
 
-	private async fetchIPWhoDotIs(ip: string): Promise<IPDOXResponse> {
-		const requestURL = GeoAPIs.IPWHO_DOT_IS + ip;
-		const response = await this.http.get(requestURL);
-
-		if (response.data.success) {
-			const zip =
-				typeof response.data.postal === "string" && response.data.postal !== ""
-					? response.data.postal
-					: undefined;
-			const isp =
-				typeof response.data.connection?.isp === "string" &&
-				response.data.connection.isp !== ""
-					? response.data.connection.isp
-					: undefined;
-			const proxy =
-				typeof response.data.proxy === "boolean"
-					? response.data.proxy
-					: undefined;
-			const isHosting =
-				typeof response.data.hosting === "boolean"
-					? response.data.hosting
-					: undefined;
-			const timeZone =
-				typeof response.data.timezone?.id === "string"
-					? response.data.timezone.id
-					: typeof response.data.timezone === "string"
-						? response.data.timezone
-						: undefined;
-			const formattedResponse: IPDOXResponse = {
-				ip: response.data.ip,
-				country: response.data.country_code,
-				city: response.data.city,
-				continent: response.data.continent_code,
-				latitude: response.data.latitude,
-				longitude: response.data.longitude,
-				zip,
-				isp,
-				proxy,
-				isHosting,
-				timeZone,
-				source: "ipwho.is"
-			};
-
-			this.cacheResponse(ip, formattedResponse);
-
-			return Promise.resolve(formattedResponse);
-		} else {
-			return Promise.reject();
-		}
+	private async fetchCountryDotIs(ip: string): Promise<IPDOXResponse> {
+		const { data } = await this.http.get(
+			GeoAPIs.COUNTRY_DOT_IS +
+				encodeURIComponent(ip) +
+				"?fields=city,continent,postal,location,asn"
+		);
+		const country = this.pickStringOrEmpty(data?.country);
+		const response: IPDOXResponse = {
+			ip: this.pickStringOrEmpty(data?.ip),
+			country,
+			city: this.pickStringOrEmpty(data?.city),
+			continent:
+				this.parseString(data?.continent) ?? continentForCountry(country) ?? "",
+			latitude: this.parseNumber(data?.location?.latitude) ?? NaN,
+			longitude: this.parseNumber(data?.location?.longitude) ?? NaN,
+			zip: this.parseString(data?.postal),
+			isp: this.parseString(data?.asn?.organization),
+			timeZone: this.parseString(data?.location?.time_zone),
+			source: "country.is"
+		};
+		this.cacheResponse(ip, response, 3_600_000);
+		return response;
 	}
 
-	private async fetchIPAPIDotCo(ip: string): Promise<IPDOXResponse> {
-		const requestURL = GeoAPIs.IPAPI_DOT_CO + ip + "/json";
-		const response = await this.http.get(requestURL);
+	private async fetchIPInfoDotCom(ip: string): Promise<IPDOXResponse> {
+		const { data } = await this.http.get(
+			GeoAPIs.IP_INFO_DOT_COM + "?ip=" + encodeURIComponent(ip)
+		);
+		const country = this.pickStringOrEmpty(data?.country);
+		const response: IPDOXResponse = {
+			ip: this.pickStringOrEmpty(data?.ip),
+			country,
+			city: this.pickStringOrEmpty(data?.city),
+			continent:
+				this.parseString(data?.continent) ?? continentForCountry(country) ?? "",
+			latitude: this.parseNumber(data?.latitude) ?? NaN,
+			longitude: this.parseNumber(data?.longitude) ?? NaN,
+			zip: this.parseString(data?.postal),
+			isp: this.pickString(data?.isp, data?.org),
+			timeZone: this.parseString(data?.timezone),
+			source: "ip-info.com"
+		};
+		// no-store: validate but never retain this provider's response in LRU.
+		this.cacheResponse(ip, response, 0);
+		return response;
+	}
 
-		if (response.data.ip) {
-			const zip =
-				typeof response.data.postal === "string" && response.data.postal !== ""
-					? response.data.postal
-					: undefined;
-			const isp =
-				typeof response.data.org === "string" && response.data.org !== ""
-					? response.data.org
-					: undefined;
-			const timeZone =
-				typeof response.data.timezone === "string"
-					? response.data.timezone
-					: undefined;
-			const formattedResponse: IPDOXResponse = {
-				ip: response.data.ip,
-				country: response.data.country_code,
-				city: response.data.city,
-				continent: response.data.continent_code,
-				latitude: response.data.latitude,
-				longitude: response.data.longitude,
-				zip,
-				isp,
-				timeZone,
-				source: "ipapi.co"
-			};
+	private async fetchIPAddressDetailsDotCom(
+		ip: string
+	): Promise<IPDOXResponse> {
+		const { data, headers } = await this.http.get(
+			GeoAPIs.IP_ADDRESS_DETAILS_DOT_COM + encodeURIComponent(ip)
+		);
+		this.providerBudget.observeDailyRemaining(
+			GeoAPIs.IP_ADDRESS_DETAILS_DOT_COM,
+			headers?.["x-ratelimit-remaining-day"]
+		);
+		const country = this.pickStringOrEmpty(data?.country_code);
+		const response: IPDOXResponse = {
+			ip: this.pickStringOrEmpty(data?.ip),
+			country,
+			city: this.pickStringOrEmpty(data?.city),
+			continent:
+				this.parseString(data?.continent_code) ??
+				continentForCountry(country) ??
+				"",
+			latitude: this.parseNumber(data?.latitude) ?? NaN,
+			longitude: this.parseNumber(data?.longitude) ?? NaN,
+			zip: this.parseString(data?.postal),
+			isp: this.parseString(data?.org),
+			timeZone: this.parseString(data?.timezone),
+			source: "ipaddressdetails.com"
+		};
+		this.cacheResponse(ip, response, 3_600_000);
+		return response;
+	}
 
-			this.cacheResponse(ip, formattedResponse);
+	private async fetchNetworkToolsDotDev(ip: string): Promise<IPDOXResponse> {
+		const { data } = await this.http.get(
+			GeoAPIs.NETWORK_TOOLS_DOT_DEV + "?ip=" + encodeURIComponent(ip)
+		);
+		// Live schema includes countryCode; docs also show country as an ISO code.
+		const country =
+			this.pickString(data?.geo?.countryCode, data?.geo?.country) ?? "";
+		const response: IPDOXResponse = {
+			ip: this.pickStringOrEmpty(data?.ip),
+			country,
+			city: this.pickStringOrEmpty(data?.geo?.city),
+			continent:
+				this.parseString(data?.geo?.continentCode) ??
+				continentForCountry(country) ??
+				"",
+			latitude: this.parseNumber(data?.geo?.lat) ?? NaN,
+			longitude: this.parseNumber(data?.geo?.lon) ?? NaN,
+			zip: this.parseString(data?.geo?.zipcode),
+			isp: this.parseString(data?.asn?.org),
+			source: "networktools.dev"
+		};
+		this.cacheResponse(ip, response, 3_600_000);
+		return response;
+	}
 
-			return Promise.resolve(formattedResponse);
-		} else {
-			return Promise.reject();
-		}
+	private async fetchGeoJSDotIO(ip: string): Promise<IPDOXResponse> {
+		const { data } = await this.http.get(
+			GeoAPIs.GEO_JS_DOT_IO + encodeURIComponent(ip) + ".json"
+		);
+		const country = this.pickStringOrEmpty(data?.country_code);
+		const response: IPDOXResponse = {
+			ip: this.pickStringOrEmpty(data?.ip),
+			country,
+			city: this.pickStringOrEmpty(data?.city),
+			continent:
+				this.parseString(data?.continent_code) ??
+				continentForCountry(country) ??
+				"",
+			latitude: this.parseNumber(data?.latitude) ?? NaN,
+			longitude: this.parseNumber(data?.longitude) ?? NaN,
+			isp: this.parseString(data?.organization_name),
+			timeZone: this.parseString(data?.timezone),
+			source: "geojs.io"
+		};
+		this.cacheResponse(ip, response);
+		return response;
+	}
+
+	private async fetchIPQueryDotIO(ip: string): Promise<IPDOXResponse> {
+		const { data } = await this.http.get(
+			GeoAPIs.IP_QUERY_DOT_IO + encodeURIComponent(ip)
+		);
+		const country = this.pickStringOrEmpty(data?.location?.country_code);
+		const risk = data?.risk;
+		const response: IPDOXResponse = {
+			ip: this.pickStringOrEmpty(data?.ip),
+			country,
+			city: this.pickStringOrEmpty(data?.location?.city),
+			continent: continentForCountry(country) ?? "",
+			latitude: this.parseNumber(data?.location?.latitude) ?? NaN,
+			longitude: this.parseNumber(data?.location?.longitude) ?? NaN,
+			zip: this.parseString(data?.location?.zipcode),
+			isp: this.pickString(data?.isp?.isp, data?.isp?.org),
+			timeZone: this.parseString(data?.location?.timezone),
+			proxy: typeof risk?.is_proxy === "boolean" ? risk.is_proxy : undefined,
+			isHosting:
+				typeof risk?.is_datacenter === "boolean"
+					? risk.is_datacenter
+					: undefined,
+			proxyInfo:
+				typeof risk?.is_vpn === "boolean" &&
+				typeof risk?.is_tor === "boolean" &&
+				typeof risk?.is_proxy === "boolean"
+					? { isVPN: risk.is_vpn, isTOR: risk.is_tor, isProxy: risk.is_proxy }
+					: undefined,
+			source: "ipquery.io"
+		};
+		this.cacheResponse(ip, response);
+		return response;
+	}
+
+	private async fetchHackMyIPDotCom(ip: string): Promise<IPDOXResponse> {
+		const { data: envelope } = await this.http.get(
+			GeoAPIs.HACK_MY_IP_DOT_COM + "?ip=" + encodeURIComponent(ip)
+		);
+		if (envelope?.success !== true) throw new Error("HackMyIP lookup failed");
+		const data = envelope.data;
+		const country = this.pickStringOrEmpty(data?.location?.country);
+		const response: IPDOXResponse = {
+			ip: this.pickStringOrEmpty(data?.ip),
+			country,
+			city: this.pickStringOrEmpty(data?.location?.city),
+			continent: continentForCountry(country) ?? "",
+			latitude: this.parseNumber(data?.location?.latitude) ?? NaN,
+			longitude: this.parseNumber(data?.location?.longitude) ?? NaN,
+			zip: this.parseString(data?.location?.postal_code),
+			isp: this.pickString(data?.network?.isp, data?.network?.org),
+			timeZone: this.parseString(data?.location?.timezone),
+			proxy:
+				typeof data?.privacy?.proxy === "boolean"
+					? data.privacy.proxy
+					: undefined,
+			isHosting:
+				typeof data?.privacy?.hosting === "boolean"
+					? data.privacy.hosting
+					: undefined,
+			source: "hackmyip.com"
+		};
+		this.cacheResponse(ip, response);
+		return response;
 	}
 
 	private async fetchGeoIPVuizDotNet(ip: string): Promise<IPDOXResponse> {
@@ -511,12 +629,7 @@ class IPDox {
 
 		const responseIP = this.parseString(data?.ip) ?? ip;
 		const country = this.pickString(data?.country_code, data?.countryCode);
-		const city = this.pickStringOrEmpty(
-			data?.city,
-			data?.region,
-			data?.country,
-			data?.country_name
-		);
+		const city = this.pickStringOrEmpty(data?.city);
 		const continent =
 			this.pickString(data?.continent_code, data?.continentCode) ??
 			this.normalizeContinentCode(data?.continent);
@@ -570,11 +683,7 @@ class IPDox {
 
 		const responseIP = this.parseString(data?.ip) ?? ip;
 		const country = this.parseString(data?.CountryCode);
-		const city = this.pickStringOrEmpty(
-			data?.City,
-			data?.RegionName,
-			data?.CountryName
-		);
+		const city = this.pickStringOrEmpty(data?.City);
 		const continent =
 			this.parseString(data?.ContinentCode) ??
 			this.normalizeContinentCode(data?.ContinentName);
@@ -606,52 +715,6 @@ class IPDox {
 				isp,
 				timeZone,
 				source: "apip.cc"
-			};
-
-			this.cacheResponse(ip, formattedResponse);
-
-			return Promise.resolve(formattedResponse);
-		}
-
-		return Promise.reject();
-	}
-
-	private async fetchIPSonarDotCom(ip: string): Promise<IPDOXResponse> {
-		const requestURL = GeoAPIs.IP_SONAR_DOT_COM + encodeURIComponent(ip);
-		const response = await this.http.get(requestURL);
-		const data = response.data;
-
-		const responseIP = this.parseString(data?.ip) ?? ip;
-		const country = this.parseString(data?.country_code);
-		const city = this.pickStringOrEmpty(
-			data?.city_name,
-			data?.region_name,
-			data?.country_name
-		);
-		const continent = this.parseString(data?.continent_code);
-		const latitude = this.parseNumber(data?.latitude);
-		const longitude = this.parseNumber(data?.longitude);
-
-		if (
-			responseIP &&
-			country &&
-			continent &&
-			latitude !== undefined &&
-			longitude !== undefined
-		) {
-			const zip = this.parseString(data?.postal_code);
-			const timeZone = this.parseString(data?.timezone);
-
-			const formattedResponse: IPDOXResponse = {
-				ip: responseIP,
-				country,
-				city,
-				continent,
-				latitude,
-				longitude,
-				zip,
-				timeZone,
-				source: "ip-sonar.com"
 			};
 
 			this.cacheResponse(ip, formattedResponse);

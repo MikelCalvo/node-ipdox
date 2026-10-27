@@ -27,7 +27,7 @@ Output:
   Returns error message to stderr on failure (exit code 1)
 
 Environment Variables:
-  IPDOX_API_KEY           ip-api.com Pro API key for HTTPS support
+  IPDOX_API_KEY           Optional paid ip-api.com Pro provider (not needed by default)
   IPDOX_TIMEOUT           Request timeout in ms (default: 5000)
   IPDOX_RETRIES           Max retries (default: 10)
 `;
